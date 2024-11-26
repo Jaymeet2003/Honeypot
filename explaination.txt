@@ -1,0 +1,17 @@
+The approach to writing the code involved breaking down the problem into smaller, manageable parts to simulate an SSH honeypot effectively.
+First, I decided to use `paramiko` for handling the SSH protocol and built a system to validate usernames against a file (`usernames.txt`). 
+Then, I implemented password authentication logic that mimics real-world behavior by tracking attempts and granting access only after several failed tries.
+To handle multiple users, threading was used to allow the server to manage multiple connections simultaneously.
+Finally, a basic shell environment was created, enabling users to run simple commands, and every step was logged for monitoring.
+
+Resources used:
+
+Knowledge from CS 361, 450, 454 and 468
+https://docs.python.org/3/library/socket.html
+https://docs.python.org/3/library/threading.html
+https://en.wikipedia.org/wiki/ANSI_escape_code
+https://docs.paramiko.org/en/stable/api/transport.html
+https://docs.paramiko.org/en/stable/api/keys.html?highlight=rsa#paramiko.rsakey.RSAKey
+https://docs.paramiko.org/en/stable/api/ssh_exception.html?highlight=sshexception#paramiko.ssh_exception.SSHException
+https://docs.paramiko.org/en/stable/api/auth.html?highlight=authfailed
+https://docs.paramiko.org/en/stable/api/server.html?highlight=serverinterface#paramiko.server.ServerInterface.__weakref__
