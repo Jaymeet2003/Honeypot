@@ -10,13 +10,32 @@ attempts = {}
 # Fake file system
 file_system = {}
 
+# Load valid usernames from username.txt
+def load_valid_usernames(file_path="usernames.txt"):
+    try:
+        with open(file_path, "r") as f:
+            return set(line.strip() for line in f if line.strip())
+    except FileNotFoundError:
+        print(f"[!] Username file '{file_path}' not found. Exiting.")
+        sys.exit(1)
+
+valid_usernames = load_valid_usernames()
+
 # Class to handle SSH server operations and authentication
 class HoneypotServer(paramiko.ServerInterface):
     def __init__(self):
         self.event = threading.Event()
+        self.current_username = None
 
     def check_auth_password(self, username, password):
         global attempts
+        self.current_username = username
+
+        # Validate username
+        if username not in valid_usernames:
+            print(f"[!] Invalid username: {username}. Terminating connection.")
+            return paramiko.AUTH_FAILED
+
         # Increment attempt count
         attempts[username] = attempts.get(username, 0) + 1
         print(f"[+] Login attempt for {username}: Attempt {attempts[username]} with password '{password}'")
@@ -43,8 +62,6 @@ class HoneypotServer(paramiko.ServerInterface):
 
     def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
         return True
-
-
 
 
 # Function to handle the shell session
@@ -160,8 +177,6 @@ def handle_shell(chan, username):
 
 
 def handle_connection(client, addr):
-    global attempts
-
     transport = paramiko.Transport(client)
     transport.add_server_key(paramiko.RSAKey.generate(2048))
     server = HoneypotServer()
@@ -187,56 +202,19 @@ def handle_connection(client, addr):
         return
 
     try:
-        # Immediately get the username and proceed if authentication is successful
-        username = transport.get_username()
-        if attempts.get(username, 0) > 5:
-            print(f"[+] Access granted to {username} after {attempts[username]} attempts.")
-            chan.send("\r\nAccess granted. Welcome to the honeypot.\r\n".encode())
-            handle_shell(chan, username)
+        username = server.current_username
+        if username not in valid_usernames:
+            print(f"[!] Invalid username '{username}'. Terminating connection.")
+            chan.send(b"Invalid username. Connection closed.\r\n")
+            chan.close()
             return
 
-        # Handle password attempts
-        password_buffer = ""
-        while True:
-            try:
-                chan.settimeout(5.0)
-                data = chan.recv(1024).decode()
-                if not data:
-                    print("[!] No input received; closing channel.")
-                    return  # Exit if no input is received (client disconnected)
-
-                password_buffer += data
-
-                # Check if the buffer ends with "\r" (Enter key)
-                if password_buffer.endswith("\r"):
-                    input_password = password_buffer.strip()
-                    print(f"[+] Received password attempt from {username}: {input_password}")
-                    attempts[username] += 1  # Increment attempts for each complete password entry
-                    password_buffer = ""  # Clear the buffer after processing
-
-                    # Check if the maximum number of attempts has been reached
-                    if attempts[username] > 5:
-                        chan.send("\r\nAccess granted. Welcome to the honeypot.\r\n".encode())
-                        print(f"[+] Access granted to {username} after brute-force attempts.")
-                        handle_shell(chan, username)
-                        return  # Exit after a successful shell session
-
-                    # Send "Access denied" message
-                    chan.send("\r\nAccess denied. Try again.".encode())
-                    print(f"[!] Access denied to {username}. Waiting for retry...")
-
-                    # Wait for client to press Enter (\r) for the next attempt prompt
-                    chan.send("\r\nReenter Password:".encode())
-
-            except socket.timeout:
-                print("[!] Client interaction timed out.")
-                return  # Exit the loop if the client times out
+        handle_shell(chan, username)
 
     except Exception as e:
         print(f"Error during connection handling: {e}")
     finally:
         if not chan.closed:
-            print("[!] Closing channel after retries.")
             chan.close()
         transport.close()
 
@@ -248,7 +226,6 @@ def main():
         sys.exit(1)
 
     port = int(sys.argv[2])
-    host_key = paramiko.RSAKey.generate(2048)
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
