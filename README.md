@@ -114,8 +114,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-## Author
-Jimmy Patel
+## Author: Jaymeet Patel
 Created as an educational project for learning and security research.
 
 ---
